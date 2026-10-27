@@ -1,0 +1,21 @@
+# External MySQL metadata database
+# =================================
+# Usage:
+#   cp conf/z-90-database.mysql.ini.example conf/z-90-database.ini
+#   edit host/user/password/name
+#   ./bin/start.sh
+#
+# When this file is active as conf/z-90-database.ini with engine=mysql,
+# start.sh will NOT use embedded SQLite.
+#
+# Example (colleague cluster):
+#   host=node53  user=root  password=***  name=hue
+
+[desktop]
+[[database]]
+engine=mysql
+host=node53
+port=3306
+user=hue
+password=hue
+name=hue

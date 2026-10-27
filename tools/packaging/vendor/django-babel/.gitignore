@@ -1,0 +1,8 @@
+build
+.cache
+.coverage
+dist
+*.pyc
+django_babel.egg-info
+.tox
+htmlcov
