@@ -65,6 +65,9 @@ class TrinoApi(Api):
 
     auth_username = self.options.get('auth_username', DEFAULT_AUTH_USERNAME.get())
     auth_password = self.options.get('auth_password', self.get_auth_password())
+    # Honor interpreter options.verify (colleague/Kylin: skip TLS verify for self-signed Trino).
+    # Default True to preserve secure behavior when unset.
+    self.verify = self.options.get('verify', True)
 
     if auth_username and auth_password:
       self.auth_username = auth_username
@@ -78,7 +81,8 @@ class TrinoApi(Api):
       port=self.server_port,
       client_session=self.trino_session,
       http_scheme=self.http_scheme,
-      auth=self.auth
+      auth=self.auth,
+      verify=self.verify,
     )
 
   def get_auth_password(self):

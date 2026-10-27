@@ -1,0 +1,84 @@
+# Hue (master / Python 3.11) relocatable tarball builder — Rocky Linux 8 (glibc 2.28)
+# Target runtime: Kylin V10 / CentOS 8+ (x86_64 and aarch64)
+# Use Rocky 8.10+ so AppStream provides python3.11 (Hue master requires >= 3.9, default 3.11).
+
+# Prefer quay.io to avoid docker.io mirror rate limits in CN networks.
+FROM quay.io/rockylinux/rockylinux:8.10
+
+LABEL description="Hue packaging build image (EL8, Python 3.11)"
+
+ARG TARGETARCH
+ENV PYTHON_VER=python3.11 \
+    LANG=C.UTF-8 \
+    LC_ALL=C.UTF-8
+
+RUN dnf -y install epel-release && \
+    dnf -y install \
+      bzip2-devel \
+      curl \
+      cyrus-sasl \
+      cyrus-sasl-devel \
+      cyrus-sasl-gssapi \
+      cyrus-sasl-plain \
+      file \
+      findutils \
+      gcc \
+      gcc-c++ \
+      gettext \
+      git \
+      java-11-openjdk-devel \
+      krb5-devel \
+      krb5-libs \
+      krb5-workstation \
+      libffi-devel \
+      libxml2 \
+      libxml2-devel \
+      libxslt \
+      libxslt-devel \
+      make \
+      maven \
+      ncurses-devel \
+      openldap-devel \
+      openssl \
+      openssl-devel \
+      patch \
+      python3.11 \
+      python3.11-devel \
+      python3.11-pip \
+      rsync \
+      sqlite \
+      sqlite-devel \
+      tar \
+      which \
+      xmlsec1 \
+      xmlsec1-openssl \
+      zlib-devel \
+      mariadb-devel \
+      mariadb-connector-c \
+      binutils \
+      patchelf \
+      hostname \
+      procps-ng && \
+    dnf clean all && \
+    rm -rf /var/cache/dnf && \
+    python3.11 --version
+
+# Node 14 from Rocky AppStream module (offline-friendly vs nodejs.org tarball)
+RUN dnf -y module enable nodejs:14 && \
+    dnf -y install nodejs && \
+    dnf clean all && \
+    rm -rf /var/cache/dnf && \
+    node -v && npm -v
+
+# Master pins pip via Makefile (PIP_VERSION); keep a usable bootstrap pip on the image.
+RUN python3.11 -m pip install --upgrade 'pip==22.2.2' 'setuptools<70' 'wheel' 'virtualenv==20.24.6'
+
+WORKDIR /work
+COPY scripts/ /opt/hue-packaging/scripts/
+COPY templates/ /opt/hue-packaging/templates/
+COPY conf/ /opt/hue-packaging/conf/
+
+ENV PACKAGING_HOME=/opt/hue-packaging \
+    HUE_PREFIX=/opt/hue
+
+ENTRYPOINT ["/opt/hue-packaging/scripts/package-inside.sh"]
