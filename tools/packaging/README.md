@@ -53,7 +53,9 @@ cd hue
 # 仍保留 ./bin/start.sh|stop.sh|status.sh 兼容旧用法
 ```
 
-浏览器访问：`http://<host>:8888`（可用 `conf` 改为 8000）
+浏览器访问：`http://<host>:8000`（见 `conf/z-10-defaults.ini`）
+
+默认已关闭 Oozie/Job Designer（`app_blacklist=oozie,jobsub`，`oozie_url=`），避免连 `localhost:11000`。调度请用 DolphinScheduler 等外部系统；若确需 Oozie，再在更高优先级 ini 里改回。
 
 ### Hive + Trino + HBase
 

@@ -31,9 +31,13 @@ LOG = logging.getLogger()
 class BeatApi(Api):
 
   def apps(self, filters):
-    api = CeleryBeatApi(user=self.user)
-
-    tasks = api.list_tasks(self.user)
+    try:
+      api = CeleryBeatApi(user=self.user)
+      tasks = api.list_tasks(self.user)
+    except Exception as ex:
+      # Beat off / django_celery_beat not in INSTALLED_APPS — return empty instead of 500.
+      LOG.warning('Celery Beat unavailable: %s' % ex)
+      return {'apps': [], 'total': 0}
 
     return {
       'apps': [{

@@ -16,11 +16,23 @@
 # limitations under the License.
 
 import json
-
-from django_celery_beat.models import PeriodicTask, CrontabSchedule, IntervalSchedule
+import logging
 
 from desktop.lib.scheduler.lib.api import Api
 from desktop.models import Document2
+
+LOG = logging.getLogger()
+
+
+def _beat_models():
+  """Lazy import — django_celery_beat is only in INSTALLED_APPS when beat_enabled."""
+  try:
+    from django_celery_beat.models import PeriodicTask, CrontabSchedule, IntervalSchedule
+  except Exception as ex:
+    raise Exception(
+      'Celery Beat is not enabled (install/enable task_server beat, or ignore Scheduled Tasks). %s' % ex
+    )
+  return PeriodicTask, CrontabSchedule, IntervalSchedule
 
 
 class CeleryBeatApi(Api):
@@ -33,6 +45,7 @@ class CeleryBeatApi(Api):
     mapping
       {u'oozie.use.system.libpath': u'True', 'dryrun': False, u'start_date': u'2019-08-10T17:02', u'end_date': u'2019-08-17T17:02'}
     '''
+    PeriodicTask, CrontabSchedule, IntervalSchedule = _beat_models()
     # IntervalSchedule is buggy https://github.com/celery/django-celery-beat/issues/279
     is_cron = True
 
@@ -73,16 +86,19 @@ class CeleryBeatApi(Api):
 
 
   def list_tasks(self, user):
+    PeriodicTask, _, _ = _beat_models()
     return [
       self._get_task(task)
       for task in PeriodicTask.objects.filter(description=user.username)
     ]
 
   def list_task(self, task_id):
+    PeriodicTask, _, _ = _beat_models()
     return self._get_task(PeriodicTask.objects.get(id=task_id))
 
 
   def action(self, schedule_id, action='suspend'):
+    PeriodicTask, _, _ = _beat_models()
     task = PeriodicTask.objects.get(id=schedule_id, description=self.user.username)
 
     if action == 'suspend':

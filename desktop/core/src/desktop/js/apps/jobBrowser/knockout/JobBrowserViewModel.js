@@ -75,8 +75,10 @@ export default class JobBrowserViewModel {
       const schedulerExtraInterfaceCondition = () =>
         !this.isMini() && schedulerInterfaceCondition();
 
+      // Must use optional indexOf: when Oozie is blacklisted and beat is off,
+      // scheduler is absent and `undefined !== -1` would incorrectly show this tab.
       const schedulerBeatInterfaceCondition = () =>
-        this.appConfig()?.scheduler?.interpreter_names.indexOf('celery-beat') !== -1;
+        (this.appConfig()?.scheduler?.interpreter_names || []).indexOf('celery-beat') !== -1;
 
       const livyInterfaceCondition = () =>
         !this.isMini() &&
