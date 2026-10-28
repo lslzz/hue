@@ -1,0 +1,50 @@
+#!/usr/bin/env bash
+# Unified Hue service control: start | stop | restart | status | help
+set -euo pipefail
+
+ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+BIN="${ROOT}/bin"
+
+usage() {
+  cat <<EOF
+Usage: ${0##*/} <command>
+
+Commands:
+  start      Start Hue (migrate + supervisor daemon)
+  stop       Stop Hue supervisor
+  restart    Stop then start
+  status     Show running / stopped
+  help       Show this help
+
+Examples:
+  ${0##*/} start
+  ${0##*/} status
+  ${0##*/} restart
+EOF
+}
+
+cmd="${1:-}"
+case "${cmd}" in
+  start)
+    exec "${BIN}/start.sh"
+    ;;
+  stop)
+    exec "${BIN}/stop.sh"
+    ;;
+  restart)
+    "${BIN}/stop.sh" || true
+    exec "${BIN}/start.sh"
+    ;;
+  status)
+    exec "${BIN}/status.sh"
+    ;;
+  help|-h|--help|"")
+    usage
+    exit 0
+    ;;
+  *)
+    echo "Unknown command: ${cmd}" >&2
+    usage >&2
+    exit 2
+    ;;
+esac

@@ -61,7 +61,7 @@ for app in apps/*; do
     popd >/dev/null
   fi
 done
-find . -name '*.pyc' -delete || true
+find . -name '*.pyc' ! -path './lib/python*/encodings/*' -delete || true
 popd >/dev/null
 # Also normalize remaining absolute shebangs to env-based ones
 PYTHON_VER="${PYTHON_VER:-python3.11}"

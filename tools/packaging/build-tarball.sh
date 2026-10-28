@@ -11,7 +11,7 @@ set -euo pipefail
 
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 REPO_ROOT=$(cd "${SCRIPT_DIR}/../.." && pwd)
-IMAGE_NAME="${HUE_PACKAGING_IMAGE:-hue-packaging-el8:master-py311}"
+IMAGE_NAME="${HUE_PACKAGING_IMAGE:-hue-packaging-el8:20250903-py311}"
 OUT_DIR="${HUE_PACKAGING_OUT:-${REPO_ROOT}/dist/packaging}"
 DOCKERFILE="${SCRIPT_DIR}/Dockerfile.el8"
 
@@ -90,7 +90,8 @@ run_package() {
   fi
 
   local git_stamp
-  git_stamp="$(git -C "${REPO_ROOT}" log -1 --format='%cd-%h' --date=format:'%Y%m%d' 2>/dev/null || echo master)"
+  # Prefix with baseline tag so artifacts are distinguishable from tip-of-master packs.
+  git_stamp="20250903-$(git -C "${REPO_ROOT}" log -1 --format='%cd-%h' --date=format:'%Y%m%d' 2>/dev/null || echo local)"
 
   docker run --rm \
     --platform "${platform}" \

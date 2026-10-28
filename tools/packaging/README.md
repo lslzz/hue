@@ -1,8 +1,8 @@
-# Hue（master）可重定位双架构打包
+# Hue（20250903-140101 + packaging）可重定位双架构打包
 
-在 Rocky Linux 8.10 容器中编译 **当前仓库 master 线**（含 Trino 原生 connector），产出面向 **Kylin V10 / CentOS 8+** 的解压即用 tar 包（`x86_64` / `aarch64`）。
+在 Rocky Linux 8.10 容器中编译 **tag `20250903-140101` 基线**（Django 4.1，便于对接 **MySQL 5.7**），叠加本目录 packaging、Trino `options.verify`、`polars-lts-cpu`，产出面向 **Kylin V10 / CentOS 8+** 的解压即用 tar 包（`x86_64` / `aarch64`）。
 
-说明：上游 `VERSION` 仍可能显示 `4.11.0`，产物文件名会带 `master-<日期>-<commit>` 以免和旧 release 包混淆。
+说明：上游 `VERSION` 仍为 `4.11.0`，产物文件名带 `20250903-<日期>-<commit>`。
 
 ## 一键打包
 
@@ -22,7 +22,7 @@
 产物目录：`dist/packaging/`
 
 ```
-hue-4.11.0-master-YYYYMMDD-<sha>-linux-x86_64.tar.gz
+hue-4.11.0-20250903-YYYYMMDD-<sha>-linux-x86_64.tar.gz
 ```
 
 ## 包目录结构
@@ -41,14 +41,16 @@ hue/
   www/      static → 静态资源
 ```
 
-## 一键启动
+## 一键启停（统一入口）
 
 ```bash
 tar -xzf hue-*-linux-x86_64.tar.gz
 cd hue
-./bin/start.sh      # 默认 SQLite：data/desktop.db
-./bin/status.sh
-./bin/stop.sh
+./bin/huectl start      # 默认 SQLite：data/desktop.db
+./bin/huectl status
+./bin/huectl restart
+./bin/huectl stop
+# 仍保留 ./bin/start.sh|stop.sh|status.sh 兼容旧用法
 ```
 
 浏览器访问：`http://<host>:8888`（可用 `conf` 改为 8000）

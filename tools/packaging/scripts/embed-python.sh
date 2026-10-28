@@ -68,5 +68,8 @@ done < <(find "${VENV_BIN}" -type f -print0)
 echo "--- Verifying embedded runtime"
 export PYTHONHOME="${PY_HOME}"
 export LD_LIBRARY_PATH="${PY_HOME}/lib64:${NATIVE_DIR}${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
-"${VENV_BIN}/${PYTHON_VER}" -c "import encodings, ssl, sqlite3, ctypes; print('ok', encodings.__file__)"
+"${VENV_BIN}/${PYTHON_VER}" -c "import encodings, ssl, sqlite3, ctypes, codecs; codecs.lookup('windows-1252'); print('ok', encodings.__file__)"
+# RHEL/Rocky often ship western encodings as encodings/*.pyc only — keep them.
+enc_pyc=$(find "${PY_HOME}/lib64/python${PY_XY}/encodings" -maxdepth 1 -name '*.pyc' 2>/dev/null | wc -l)
+echo "encodings/*.pyc retained: ${enc_pyc}"
 du -sh "${PY_HOME}"

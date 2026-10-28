@@ -34,13 +34,13 @@ m=re.search(r'VERSION\s*=\s*"([^"]+)"', text)
 print(m.group(1) if m else "unknown")
 PY
 )"
-# Disambiguate master-line packages that still ship VERSION=4.11.0
+# Disambiguate packages that still ship VERSION=4.11.0
 # Prefer GIT_STAMP from host (source mount often excludes .git)
 GIT_STAMP="${GIT_STAMP:-}"
 if [[ -z "${GIT_STAMP}" ]]; then
   GIT_STAMP="$(git -C "${HUE_SRC}" log -1 --format='%cd-%h' --date=format:'%Y%m%d' 2>/dev/null || date +%Y%m%d)-local"
 fi
-PKG_NAME="hue-${VERSION}-master-${GIT_STAMP}-linux-${ARCH_LABEL}"
+PKG_NAME="hue-${VERSION}-${GIT_STAMP}-linux-${ARCH_LABEL}"
 STAGE_ROOT="/work/stage"
 PKG_ROOT="${STAGE_ROOT}/hue"
 
@@ -98,6 +98,22 @@ fi
 
 echo "--- make install (PYTHON_VER=${PYTHON_VER})"
 export PYTHON_VER
+# cx_Oracle sdist imports pkg_resources. Pip build isolation may otherwise pull
+# setuptools>=82 (no pkg_resources). Constrain setuptools but still allow Hue's ==70.
+export PIP_CONSTRAINT="${PIP_CONSTRAINT:-/tmp/hue-packaging-pip-constraints.txt}"
+cat >"${PIP_CONSTRAINT}" <<'EOF'
+setuptools>=69,<81
+EOF
+echo "--- PIP_CONSTRAINT=${PIP_CONSTRAINT} (keep pkg_resources for legacy sdists)"
+# Optional Oracle driver often breaks offline/EL8 builds; drop for packaging unless requested.
+if [[ "${HUE_KEEP_CX_ORACLE:-0}" != "1" ]]; then
+  for f in desktop/core/base_requirements.txt desktop/core/generate_requirements.py; do
+    [[ -f "${f}" ]] || continue
+    sed -i -E 's/^([[:space:]]*)["]?cx-Oracle==/#\1cx-Oracle== (dropped for packaging)/' "${f}" || true
+    sed -i -E 's/^([[:space:]]*"cx-Oracle==)/#\1/' "${f}" || true
+  done
+  echo "--- Dropped cx-Oracle from requirements (set HUE_KEEP_CX_ORACLE=1 to keep)"
+fi
 export PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python
 export SKIP_PYTHONDEV_CHECK=1
 export ROOT="${BUILD_SRC}"
@@ -166,19 +182,31 @@ for app in apps/*; do
     popd >/dev/null
   fi
 done
-find . -name '*.pyc' -delete || true
+# Keep stdlib encodings that RHEL/Rocky ship as only *.pyc (e.g. cp1252.pyc).
+find . -name '*.pyc' ! -path './lib/python*/encodings/*' -delete || true
 popd >/dev/null
 
-# Metadata DB connector for optional external MySQL
+# Metadata DB connector for optional external MySQL (use python -m pip to avoid bad shebangs)
 echo "--- Installing mysqlclient into venv (optional external MySQL)"
-"${HUE_PREFIX}/build/env/bin/pip" install --no-cache-dir 'mysqlclient>=2.1.0,<3' || \
-  "${HUE_PREFIX}/build/env/bin/pip" install --no-cache-dir mysqlclient || \
-  echo "WARNING: mysqlclient install failed; SQLite will still work" >&2
+VENV_PY="${HUE_PREFIX}/build/env/bin/python"
+if ! "${VENV_PY}" -m pip install --no-cache-dir 'mysqlclient>=2.1.0,<3'; then
+  "${VENV_PY}" -m pip install --no-cache-dir mysqlclient || \
+    echo "WARNING: mysqlclient install failed; SQLite will still work" >&2
+fi
+"${VENV_PY}" -c "import MySQLdb; print('mysqlclient', getattr(MySQLdb,'__version__','ok'))" 2>/dev/null || \
+  echo "WARNING: mysqlclient import failed after install" >&2
 
-# trino is in master base_requirements; assert it landed
+# Old CPUs (no AVX2) SIGILL on stock polars — swap to lts-cpu (same import name).
+echo "--- Replacing polars with polars-lts-cpu for broader CPU support"
+"${VENV_PY}" -m pip uninstall -y polars polars-lts-cpu 2>/dev/null || true
+"${VENV_PY}" -m pip install --no-cache-dir 'polars-lts-cpu==1.8.2' || \
+  echo "WARNING: polars-lts-cpu install failed; keep stock polars if present" >&2
+"${VENV_PY}" -c "import polars as pl; print('polars', pl.__version__)" 2>/dev/null || true
+
+# trino is in base_requirements; assert it landed
 echo "--- Checking trino client"
-"${HUE_PREFIX}/build/env/bin/python" -c "import trino; print('trino', getattr(trino,'__version__', 'ok'))" || \
-  "${HUE_PREFIX}/build/env/bin/pip" install --no-cache-dir 'trino==0.329.0'
+"${VENV_PY}" -c "import trino; print('trino', getattr(trino,'__version__', 'ok'))" || \
+  "${VENV_PY}" -m pip install --no-cache-dir 'trino==0.329.0'
 
 echo "--- Rearrange to packaging layout"
 bash "${PACKAGING_HOME}/scripts/rearrange.sh" "${HUE_PREFIX}" "${PKG_ROOT}"
@@ -203,8 +231,17 @@ rm -rf \
   "${PKG_ROOT}/lib/hue/.git" \
   "${PKG_ROOT}/lib/hue/desktop/core/ext-py" \
   || true
-find "${PKG_ROOT}" -name '*.pyc' -delete || true
-find "${PKG_ROOT}" -name '__pycache__' -type d -exec rm -rf {} + 2>/dev/null || true
+# Do NOT wipe python-runtime encodings/*.pyc — Rocky python3.11 ships many
+# codecs (windows-1252/cp1252, iso8859_*, …) as bytecode-only modules.
+find "${PKG_ROOT}" -name '*.pyc' ! -path '*/python-runtime/*' -delete || true
+find "${PKG_ROOT}" -name '__pycache__' -type d ! -path '*/python-runtime/*' -exec rm -rf {} + 2>/dev/null || true
+
+# xlwt declares coding: windows-1252; ensure codec import works in embedded runtime
+if ! "${PKG_ROOT}/lib/hue/build/env/bin/python" -c "import codecs; codecs.lookup('windows-1252')" 2>/dev/null; then
+  echo "WARNING: windows-1252 missing; rewriting xlwt coding cookies to utf-8" >&2
+  find "${PKG_ROOT}/lib/hue/build/env" -path '*/site-packages/xlwt/*.py' -print0 2>/dev/null \
+    | xargs -0 -r sed -i '1s/coding: windows-1252/coding: utf-8/'
+fi
 
 TGZ="${OUT_DIR}/${PKG_NAME}.tar.gz"
 echo "--- Creating ${TGZ}"
