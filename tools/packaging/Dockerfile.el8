@@ -8,11 +8,35 @@ FROM quay.io/rockylinux/rockylinux:8.10
 LABEL description="Hue packaging build image (EL8, Python 3.11)"
 
 ARG TARGETARCH
+# Optional Rocky yum mirror (CN networks often fail on mirrors.rockylinux.org).
+# Example: --build-arg ROCKY_MIRROR=https://mirrors.ustc.edu.cn/rocky
+ARG ROCKY_MIRROR=https://mirrors.ustc.edu.cn/rocky
 ENV PYTHON_VER=python3.11 \
     LANG=C.UTF-8 \
     LC_ALL=C.UTF-8
 
-RUN dnf -y install epel-release && \
+RUN if [[ -n "${ROCKY_MIRROR}" ]]; then \
+      for f in /etc/yum.repos.d/Rocky-*.repo; do \
+        sed -i \
+          -e 's|^mirrorlist=|#mirrorlist=|g' \
+          -e "s|^#baseurl=http://dl.rockylinux.org/\$contentdir|baseurl=${ROCKY_MIRROR}|g" \
+          -e "s|^baseurl=http://dl.rockylinux.org/\$contentdir|baseurl=${ROCKY_MIRROR}|g" \
+          "$f"; \
+      done; \
+    fi && \
+    dnf -y install epel-release && \
+    if [[ -n "${ROCKY_MIRROR}" ]]; then \
+      for f in /etc/yum.repos.d/epel*.repo; do \
+        [[ -f "$f" ]] || continue; \
+        sed -i \
+          -e 's|^metalink=|#metalink=|g' \
+          -e 's|^mirrorlist=|#mirrorlist=|g' \
+          -e 's|^#baseurl=https://download.example/pub/epel|baseurl=https://mirrors.ustc.edu.cn/epel|g' \
+          -e 's|^#baseurl=https://download.fedoraproject.org/pub/epel|baseurl=https://mirrors.ustc.edu.cn/epel|g' \
+          -e 's|^baseurl=https://download.fedoraproject.org/pub/epel|baseurl=https://mirrors.ustc.edu.cn/epel|g' \
+          "$f"; \
+      done; \
+    fi && \
     dnf -y install \
       bzip2-devel \
       curl \
