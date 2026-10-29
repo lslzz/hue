@@ -55,10 +55,14 @@ case "${ARCH_ARG}" in
   *) echo "ERROR: --arch must be host|amd64|arm64|all" >&2; exit 1 ;;
 esac
 
+have_buildx() {
+  docker buildx version >/dev/null 2>&1
+}
+
 ensure_qemu() {
   local want="$1"
   if [[ "${want}" != "${HOST_PLATFORM}" ]]; then
-    if ! docker buildx version >/dev/null 2>&1; then
+    if ! have_buildx; then
       echo "ERROR: cross-arch build requires docker buildx" >&2
       exit 1
     fi
@@ -70,12 +74,25 @@ ensure_qemu() {
 build_image() {
   local platform="$1"
   echo "=== Building image ${IMAGE_NAME} for ${platform} ==="
-  docker buildx build \
-    --load \
-    --platform "${platform}" \
-    -f "${DOCKERFILE}" \
-    -t "${IMAGE_NAME}" \
-    "${SCRIPT_DIR}"
+  # Prefer buildx when present; older Docker (e.g. Kylin) often has no buildx/--load.
+  # Native same-arch builds can use plain `docker build`.
+  if have_buildx; then
+    docker buildx build \
+      --load \
+      --platform "${platform}" \
+      -f "${DOCKERFILE}" \
+      -t "${IMAGE_NAME}" \
+      "${SCRIPT_DIR}"
+  elif [[ "${platform}" == "${HOST_PLATFORM}" ]]; then
+    echo "(no docker buildx; using docker build for native ${platform})"
+    docker build \
+      -f "${DOCKERFILE}" \
+      -t "${IMAGE_NAME}" \
+      "${SCRIPT_DIR}"
+  else
+    echo "ERROR: docker buildx missing; cannot cross-build ${platform} on ${HOST_PLATFORM}" >&2
+    exit 1
+  fi
 }
 
 run_package() {
@@ -93,8 +110,13 @@ run_package() {
   # Prefix with baseline tag so artifacts are distinguishable from tip-of-master packs.
   git_stamp="20250903-$(git -C "${REPO_ROOT}" log -1 --format='%cd-%h' --date=format:'%Y%m%d' 2>/dev/null || echo local)"
 
-  docker run --rm \
-    --platform "${platform}" \
+  local -a run_args=(--rm)
+  # --platform needs newer Docker/buildx; omit for native builds on older daemons.
+  if have_buildx || [[ "${platform}" != "${HOST_PLATFORM}" ]]; then
+    run_args+=(--platform "${platform}")
+  fi
+
+  docker run "${run_args[@]}" \
     -e HUE_SRC=/work/src \
     -e OUT_DIR=/work/out \
     -e PYTHON_VER="${PYTHON_VER:-python3.11}" \
