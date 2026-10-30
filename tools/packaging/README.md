@@ -83,6 +83,19 @@ cp conf/z-90-database.mysql.ini.example conf/z-90-database.ini
 - 同架构（x86_64 或 aarch64）
 - glibc ≥ 2.28（EL8 / Kylin V10 一代）
 - 内核与基础用户态
+- **cyrus-sasl-plain**（HiveServer2 等 Thrift SASL PLAIN 握手必需）。注意：`lib/native` 只带 libsasl2 核心库，PLAIN 等机制插件（`libplain.so`）是运行时 dlopen 加载的，**打包带不上**，必须由目标机系统提供
+- 走 Kerberos（GSSAPI）时另需 `cyrus-sasl-gssapi`
+
+安装与验证：
+
+```bash
+yum install -y cyrus-sasl-plain
+# 离线机器：从 Kylin V10 SP3 同架构 ISO 的 Packages/ 中 rpm -Uvh cyrus-sasl-plain-*.rpm，
+# 或从任一同架构节点拷 /usr/lib64/sasl2/libplain.so 过来即可
+ls /usr/lib64/sasl2/ | grep -i plain   # 应出现 libplain.so
+```
+
+缺失时的典型症状：页面报 `Could not start SASL: SASL(-4): no mechanism available: No worthy mechs found`，左侧 Databases 列表显示 `Error loading databases`。
 
 ## 设计说明
 

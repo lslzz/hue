@@ -40,6 +40,12 @@ mkdir -p "${DESKTOP_LOG_DIR}" "${HUE_RUN_DIR}" "${HUE_DATA_DIR}" "${PYTHON_EGG_C
 # Put venv first so `#!/usr/bin/env python3.11` resolves to the embedded interpreter
 export PATH="${HUE_BIN}:${HUE_HOME}/bin:${PATH}"
 
+# Hue talks to the cluster directly. Inherited proxy vars (e.g. socks5://...)
+# break requests/urllib3 with "Missing dependencies for SOCKS support"
+# since PySocks is not in the venv — and routing via a proxy is wrong anyway.
+unset http_proxy https_proxy all_proxy ftp_proxy
+unset HTTP_PROXY HTTPS_PROXY ALL_PROXY FTP_PROXY
+
 # Do NOT export LD_LIBRARY_PATH globally — it can break system tools (sed/mkdir).
 # Only inject native + libpython paths when launching Hue.
 hue_run() {
